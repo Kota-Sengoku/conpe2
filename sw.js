@@ -1,4 +1,6 @@
-const CACHE_NAME = "kakeibo-cache-v1";
+// v2: network-first for same-origin requests, so a redeploy shows up on the
+// next reload instead of being masked forever by a stale cache-first cache.
+const CACHE_NAME = "kakeibo-cache-v2";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +9,7 @@ const CORE_ASSETS = [
   "./js/db.js",
   "./js/ocr.js",
   "./js/paypay-csv.js",
+  "./js/categorize.js",
   "./manifest.json",
 ];
 
@@ -31,16 +34,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return; // let CDN requests pass through normally
 
+  // Network-first: always try to get the latest version; fall back to the
+  // cache only when offline, so app updates are visible on the next reload.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return res;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((res) => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

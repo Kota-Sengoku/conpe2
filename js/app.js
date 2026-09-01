@@ -580,8 +580,11 @@ function currentMapping() {
 function updateCsvPreview() {
   if (!csvParsed) return;
   const mapping = currentMapping();
-  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
+  const { transactions: parsedTx, excludedPointCount } = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
   $("#csvCount").textContent = parsedTx.length;
+  $("#csvPointNote").textContent = excludedPointCount > 0
+    ? `（ポイント関連の明細を${excludedPointCount}件、収支から除外しました）`
+    : "";
 
   const previewRows = parsedTx.slice(0, 8);
   const table = document.createElement("table");
@@ -595,7 +598,7 @@ function updateCsvPreview() {
 $("#importCsvBtn").addEventListener("click", async () => {
   if (!csvParsed) return;
   const mapping = currentMapping();
-  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
+  const { transactions: parsedTx, excludedPointCount } = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
   if (parsedTx.length === 0) { alert("取り込める行がありません"); return; }
   const records = parsedTx.map((r) => ({
     id: newId(),
@@ -610,7 +613,7 @@ $("#importCsvBtn").addEventListener("click", async () => {
   await store.bulkPut("transactions", records);
   state.transactions.push(...records);
   markPaypayImported();
-  alert(`${records.length}件を取り込みました`);
+  alert(`${records.length}件を取り込みました${excludedPointCount > 0 ? `（ポイント関連${excludedPointCount}件は収支に含めていません）` : ""}`);
   $("#csvMapWrap").classList.add("hidden");
   $("#csvInput").value = "";
   $("#csvStatus").textContent = "";

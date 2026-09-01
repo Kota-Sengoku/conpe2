@@ -66,10 +66,18 @@ export function toIsoDate(str) {
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+// Point grants/point payments (e.g. "PayPayポイント付与") aren't real money
+// movement, so they're excluded from income/expense totals on import.
+export function isPointRow(name) {
+  return /ポイント/.test(name || "");
+}
+
 // `categorizeFn(name)` should return a category string or null/undefined
 // when no rule matches; `defaultCategory` is used as the fallback.
+// Returns { transactions, excludedPointCount }.
 export function rowsToTransactions(headers, rows, mapping, categorizeFn, defaultCategory = "その他") {
   const out = [];
+  let excludedPointCount = 0;
   for (const r of rows) {
     const dateRaw = mapping.date >= 0 ? r[mapping.date] : "";
     const date = toIsoDate(dateRaw);
@@ -77,6 +85,10 @@ export function rowsToTransactions(headers, rows, mapping, categorizeFn, default
     const expenseAmt = mapping.expense >= 0 ? toAmount(r[mapping.expense]) : 0;
     const incomeAmt = mapping.income >= 0 ? toAmount(r[mapping.income]) : 0;
     const name = (mapping.name >= 0 ? r[mapping.name] : "") || "取込データ";
+    if (isPointRow(name)) {
+      if (expenseAmt > 0 || incomeAmt > 0) excludedPointCount++;
+      continue;
+    }
     const category = (categorizeFn && categorizeFn(name)) || defaultCategory;
     if (expenseAmt > 0) {
       out.push({ date, amount: expenseAmt, type: "expense", name, category });
@@ -84,5 +96,5 @@ export function rowsToTransactions(headers, rows, mapping, categorizeFn, default
       out.push({ date, amount: incomeAmt, type: "income", name, category: "その他" });
     }
   }
-  return out;
+  return { transactions: out, excludedPointCount };
 }

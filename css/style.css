@@ -72,6 +72,38 @@ body {
   cursor: pointer;
 }
 
+/* Reminder banner */
+.reminder-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #FFF6DC;
+  color: #7A5A00;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+}
+.reminder-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.reminder-actions button {
+  border: none;
+  cursor: pointer;
+}
+#reminderImportBtn {
+  background: var(--green);
+  color: #fff;
+  border-radius: 14px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+#reminderDismissBtn {
+  background: none;
+  color: #7A5A00;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 /* Calendar */
 .calendar-wrap { background: var(--card-bg); }
 .weekday-row {

@@ -22,6 +22,9 @@ function yen(n) {
   return `${Math.round(n).toLocaleString("ja-JP")}円`;
 }
 
+const LS_LAST_IMPORT = "paypayLastImportDate";
+const LS_DISMISSED = "paypayReminderDismissedDate";
+
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
 function todayIso() {
@@ -166,7 +169,33 @@ async function renderCalendar() {
 
   renderSummary(year, month);
   renderTxList(year, month);
+  checkPaypayReminder();
 }
+
+/* ---------------- PayPay import reminder ---------------- */
+
+function checkPaypayReminder() {
+  const today = todayIso();
+  const lastImport = localStorage.getItem(LS_LAST_IMPORT);
+  const dismissed = localStorage.getItem(LS_DISMISSED);
+  const shouldShow = lastImport !== today && dismissed !== today;
+  $("#paypayReminder").classList.toggle("hidden", !shouldShow);
+}
+
+function markPaypayImported() {
+  localStorage.setItem(LS_LAST_IMPORT, todayIso());
+  checkPaypayReminder();
+}
+
+$("#reminderDismissBtn").addEventListener("click", () => {
+  localStorage.setItem(LS_DISMISSED, todayIso());
+  checkPaypayReminder();
+});
+
+$("#reminderImportBtn").addEventListener("click", () => {
+  switchView("viewInput");
+  $("#csvPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 function renderSummary(year, month) {
   const txs = monthTransactions(year, month);
@@ -463,6 +492,7 @@ $("#importCsvBtn").addEventListener("click", async () => {
   }));
   await store.bulkPut("transactions", records);
   state.transactions.push(...records);
+  markPaypayImported();
   alert(`${records.length}件を取り込みました`);
   $("#csvMapWrap").classList.add("hidden");
   $("#csvInput").value = "";

@@ -20,6 +20,13 @@
 </header>
 
 <main id="viewCalendar" class="view">
+  <div id="paypayReminder" class="reminder-banner hidden">
+    <span>📌 今日のPayPayデータをまだ取り込んでいません</span>
+    <div class="reminder-actions">
+      <button id="reminderImportBtn" type="button">取り込む</button>
+      <button id="reminderDismissBtn" type="button" class="icon-btn" aria-label="閉じる">&times;</button>
+    </div>
+  </div>
   <div class="calendar-wrap">
     <div class="weekday-row">
       <span class="wd sun">日</span><span class="wd">月</span><span class="wd">火</span>
@@ -83,7 +90,7 @@
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="csvPanel">
     <h2>PayPayの利用明細CSVを取り込む</h2>
     <p class="hint">
       PayPayアプリ →「くらしのマネー管理」→ 利用履歴の書き出し（CSV）でファイルを取得し、ここで選択してください。

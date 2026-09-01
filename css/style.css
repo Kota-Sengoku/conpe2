@@ -388,3 +388,4 @@ input[type="file"] { font-size: 0.85rem; margin-bottom: 8px; }
 }
 .modal-head h3 { margin: 0; font-size: 1rem; }
 .icon-btn { background: none; border: none; font-size: 1.4rem; color: var(--sub-text); cursor: pointer; }
+.modal-form { padding: 16px; }

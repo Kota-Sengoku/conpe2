@@ -1,6 +1,7 @@
-// Parses a PayPay "利用明細" CSV export. PayPay has no public API for
-// personal accounts, so CSV export + auto-parsing is the most reliable way
-// to bulk-import transaction history automatically.
+// Parses a transaction-history CSV export (PayPay's "利用明細", a bank's
+// web statement export such as 三菱UFJ銀行, etc). None of these offer a
+// personal automated-fetch API, so CSV export + auto-parsing is the most
+// reliable way to bulk-import transaction history without manual re-typing.
 
 export function parseCsv(text) {
   // Strip BOM, normalize newlines.
@@ -44,10 +45,10 @@ function findColumn(headers, keywords) {
 
 export function guessColumns(headers) {
   return {
-    date: findColumn(headers, ["利用日", "取引日", "日付", "日時"]),
-    expense: findColumn(headers, ["出金", "支出", "利用金額"]),
-    income: findColumn(headers, ["入金", "受取"]),
-    name: findColumn(headers, ["取引内容", "取引先", "内容", "店"]),
+    date: findColumn(headers, ["利用日", "取引日", "日付", "日時", "ご利用日", "取引年月日"]),
+    expense: findColumn(headers, ["出金", "支出", "利用金額", "ご利用金額", "お支払い金額", "お支払金額"]),
+    income: findColumn(headers, ["入金", "受取", "お預かり金額", "お預り金額"]),
+    name: findColumn(headers, ["取引内容", "取引先", "内容", "店", "摘要", "ご利用店名"]),
   };
 }
 
@@ -65,7 +66,9 @@ export function toIsoDate(str) {
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-export function rowsToTransactions(headers, rows, mapping) {
+// `categorizeFn(name)` should return a category string or null/undefined
+// when no rule matches; `defaultCategory` is used as the fallback.
+export function rowsToTransactions(headers, rows, mapping, categorizeFn, defaultCategory = "その他") {
   const out = [];
   for (const r of rows) {
     const dateRaw = mapping.date >= 0 ? r[mapping.date] : "";
@@ -73,11 +76,12 @@ export function rowsToTransactions(headers, rows, mapping) {
     if (!date) continue;
     const expenseAmt = mapping.expense >= 0 ? toAmount(r[mapping.expense]) : 0;
     const incomeAmt = mapping.income >= 0 ? toAmount(r[mapping.income]) : 0;
-    const name = mapping.name >= 0 ? r[mapping.name] : "PayPay";
+    const name = (mapping.name >= 0 ? r[mapping.name] : "") || "取込データ";
+    const category = (categorizeFn && categorizeFn(name)) || defaultCategory;
     if (expenseAmt > 0) {
-      out.push({ date, amount: expenseAmt, type: "expense", name: name || "PayPay利用", category: "PayPay" });
+      out.push({ date, amount: expenseAmt, type: "expense", name, category });
     } else if (incomeAmt > 0) {
-      out.push({ date, amount: incomeAmt, type: "income", name: name || "PayPay入金", category: "PayPay" });
+      out.push({ date, amount: incomeAmt, type: "income", name, category: "その他" });
     }
   }
   return out;

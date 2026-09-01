@@ -1,5 +1,5 @@
 const DB_NAME = "kakeibo-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -12,6 +12,9 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains("subscriptions")) {
         db.createObjectStore("subscriptions", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("categoryRules")) {
+        db.createObjectStore("categoryRules", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);

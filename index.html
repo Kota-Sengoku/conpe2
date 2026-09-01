@@ -21,7 +21,7 @@
 
 <main id="viewCalendar" class="view">
   <div id="paypayReminder" class="reminder-banner hidden">
-    <span>📌 今日のPayPayデータをまだ取り込んでいません</span>
+    <span>📌 今日の明細（PayPay・銀行）をまだ取り込んでいません</span>
     <div class="reminder-actions">
       <button id="reminderImportBtn" type="button">取り込む</button>
       <button id="reminderDismissBtn" type="button" class="icon-btn" aria-label="閉じる">&times;</button>
@@ -91,10 +91,11 @@
   </div>
 
   <div class="panel" id="csvPanel">
-    <h2>PayPayの利用明細CSVを取り込む</h2>
+    <h2>明細CSVを取り込む（PayPay・銀行共通）</h2>
     <p class="hint">
-      PayPayアプリ →「くらしのマネー管理」→ 利用履歴の書き出し（CSV）でファイルを取得し、ここで選択してください。
-      列を自動検出してまとめて取り込みます（公式APIが無いため、CSVからの一括取込が最も確実な自動化方法です）。
+      PayPayアプリの「くらしのマネー管理」や、三菱UFJ銀行などネットバンキングの「入出金明細」からCSVを書き出し、ここで選択してください。
+      列を自動検出してまとめて取り込みます（どちらも個人向けの自動取得APIが無いため、CSVの一括取込が最も確実な方法です）。
+      お店・取引先の名前から、設定タブのルールに沿って自動でカテゴリ分けされます。
     </p>
     <input type="file" id="csvInput" accept=".csv,text/csv">
     <div id="csvStatus" class="hint"></div>
@@ -136,6 +137,23 @@
   </div>
 
   <div class="panel">
+    <h2>自動カテゴリ分けルール</h2>
+    <p class="hint">
+      取引先・お店の名前にこのキーワードが含まれていたら、指定したカテゴリを自動でつけます。
+      CSV取込のときに使われます（手入力・レシートでもお店名を入れると自動で候補が入ります）。
+      間違っている場合はここで削除・追加して直せます。
+    </p>
+    <div id="ruleList" class="sub-list"></div>
+    <form id="ruleForm" class="form">
+      <label>キーワード（取引先名の一部）<input type="text" id="ruleKeyword" placeholder="例）Suica" required></label>
+      <label>分類するカテゴリ
+        <select id="ruleCategory"></select>
+      </label>
+      <button type="submit" class="primary-btn">ルールを追加</button>
+    </form>
+  </div>
+
+  <div class="panel">
     <h2>データ管理</h2>
     <p class="hint">この記録はこの端末のブラウザ内だけに保存されます（自分専用・非公開）。</p>
     <button id="exportBtn" class="secondary-btn">バックアップを書き出す（JSON）</button>
@@ -172,6 +190,30 @@
       <button id="dayModalClose" class="icon-btn">&times;</button>
     </div>
     <div id="dayModalList" class="tx-list"></div>
+  </div>
+</div>
+
+<div id="txEditModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>記録を編集</h3>
+      <button id="txEditClose" class="icon-btn">&times;</button>
+    </div>
+    <form id="txEditForm" class="form modal-form">
+      <div class="seg" id="teTypeSeg">
+        <button type="button" class="seg-btn active" data-type="expense">支出</button>
+        <button type="button" class="seg-btn" data-type="income">収入</button>
+      </div>
+      <label>日付<input type="date" id="teDate" required></label>
+      <label>金額（円）<input type="number" id="teAmount" min="0" required></label>
+      <label>内容・お店<input type="text" id="teName"></label>
+      <label>カテゴリ
+        <select id="teCategory"></select>
+      </label>
+      <label>メモ<input type="text" id="teMemo"></label>
+      <button type="submit" class="primary-btn">保存する</button>
+      <button type="button" id="teDeleteBtn" class="danger-btn">この記録を削除</button>
+    </form>
   </div>
 </div>
 

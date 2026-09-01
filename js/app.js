@@ -1,9 +1,11 @@
 import { store, newId } from "./db.js";
 import { parseCsv, guessColumns, rowsToTransactions, toAmount } from "./paypay-csv.js";
 import { recognizeReceipt, extractAmountCandidates } from "./ocr.js";
+import { DEFAULT_RULES, matchCategory } from "./categorize.js";
 
-const EXPENSE_CATEGORIES = ["食費", "日用品", "交通費", "娯楽", "サブスク", "医療", "交際費", "PayPay", "その他"];
+const EXPENSE_CATEGORIES = ["食費", "日用品", "交通費", "娯楽", "サブスク", "医療", "交際費", "その他"];
 const INCOME_CATEGORIES = ["給料", "お小遣い", "その他"];
+const ALL_CATEGORIES = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
 
 const state = {
   today: new Date(),
@@ -11,6 +13,7 @@ const state = {
   viewMonth: null, // 0-indexed
   transactions: [],
   subscriptions: [],
+  rules: [],
 };
 state.viewYear = state.today.getFullYear();
 state.viewMonth = state.today.getMonth();
@@ -37,6 +40,16 @@ function todayIso() {
 async function loadAll() {
   state.transactions = await store.getAll("transactions");
   state.subscriptions = await store.getAll("subscriptions");
+  state.rules = await store.getAll("categoryRules");
+  if (state.rules.length === 0) {
+    const seeded = DEFAULT_RULES.map((r) => ({ id: newId(), keyword: r.keyword, category: r.category }));
+    await store.bulkPut("categoryRules", seeded);
+    state.rules = seeded;
+  }
+}
+
+function autoCategory(name) {
+  return matchCategory(name, state.rules);
 }
 
 async function ensureRecurringForMonth(year, month) {
@@ -71,18 +84,34 @@ async function ensureRecurringForMonth(year, month) {
 
 /* ---------------- Tab switching ---------------- */
 
+let currentView = "viewCalendar";
+
+function hasMonthNav(viewId) {
+  return viewId === "viewCalendar" || viewId === "viewGraph";
+}
+
 function switchView(viewId) {
+  currentView = viewId;
   $$(".view").forEach((v) => v.classList.toggle("hidden", v.id !== viewId));
   $$(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === viewId));
-  const isCalendar = viewId === "viewCalendar";
-  $("#prevMonthBtn").classList.toggle("hidden", !isCalendar);
-  $("#nextMonthBtn").classList.toggle("hidden", !isCalendar);
-  $("#searchBtn").classList.toggle("hidden", !isCalendar);
-  $("#monthLabel").textContent = isCalendar
+  const showMonthNav = hasMonthNav(viewId);
+  $("#prevMonthBtn").classList.toggle("hidden", !showMonthNav);
+  $("#nextMonthBtn").classList.toggle("hidden", !showMonthNav);
+  $("#searchBtn").classList.toggle("hidden", viewId !== "viewCalendar");
+  $("#monthLabel").textContent = showMonthNav
     ? `${state.viewYear}年${pad2(state.viewMonth + 1)}月`
-    : { viewInput: "入力", viewGraph: "グラフ", viewSettings: "設定" }[viewId];
+    : { viewInput: "入力", viewSettings: "設定" }[viewId];
   if (viewId === "viewGraph") renderGraph();
-  if (viewId === "viewSettings") renderSubscriptionList();
+  if (viewId === "viewSettings") { renderSubscriptionList(); renderRuleList(); }
+}
+
+function changeMonth(delta) {
+  state.viewMonth += delta;
+  if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+  if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+  $("#monthLabel").textContent = `${state.viewYear}年${pad2(state.viewMonth + 1)}月`;
+  if (currentView === "viewGraph") renderGraph();
+  else renderCalendar();
 }
 
 $$(".nav-btn").forEach((btn) => {
@@ -222,11 +251,7 @@ function txRowEl(t) {
   right.innerHTML = `${t.recurring ? '<span class="tx-recur-icon">&#8635;</span>' : ""}${t.type === "income" ? "+" : ""}${yen(t.amount)}`;
   row.appendChild(left);
   row.appendChild(right);
-  row.addEventListener("click", () => {
-    if (confirm(`「${t.name || t.category}」${yen(t.amount)} を削除しますか？`)) {
-      deleteTransaction(t.id);
-    }
-  });
+  row.addEventListener("click", () => openTxEditModal(t));
   return row;
 }
 
@@ -272,25 +297,106 @@ $("#dayModal").addEventListener("click", (e) => {
   if (e.target.id === "dayModal") $("#dayModal").classList.add("hidden");
 });
 
-$("#prevMonthBtn").addEventListener("click", () => {
-  state.viewMonth--;
-  if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
-  switchView("viewCalendar");
-  renderCalendar();
-});
-$("#nextMonthBtn").addEventListener("click", () => {
-  state.viewMonth++;
-  if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
-  switchView("viewCalendar");
-  renderCalendar();
-});
+$("#prevMonthBtn").addEventListener("click", () => changeMonth(-1));
+$("#nextMonthBtn").addEventListener("click", () => changeMonth(1));
+
+// Swipe left/right to move between months on the calendar and graph tabs.
+function attachSwipeNav(el) {
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  el.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    changeMonth(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+attachSwipeNav($("#viewCalendar"));
+attachSwipeNav($("#viewGraph"));
 
 async function deleteTransaction(id) {
   await store.delete("transactions", id);
   state.transactions = state.transactions.filter((t) => t.id !== id);
   $("#dayModal").classList.add("hidden");
+  $("#txEditModal").classList.add("hidden");
   renderCalendar();
+  if (currentView === "viewGraph") renderGraph();
 }
+
+/* ---------------- Transaction edit ---------------- */
+
+let editingTxId = null;
+let editingTxType = "expense";
+
+function openTxEditModal(t) {
+  editingTxId = t.id;
+  editingTxType = t.type;
+  $$("#teTypeSeg .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.type === t.type));
+  fillCategorySelect($("#teCategory"), t.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  $("#teDate").value = t.date;
+  $("#teAmount").value = t.amount;
+  $("#teName").value = t.name || "";
+  $("#teCategory").value = t.category;
+  $("#teMemo").value = t.memo || "";
+  $("#txEditModal").classList.remove("hidden");
+}
+
+$("#teTypeSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest(".seg-btn");
+  if (!btn) return;
+  editingTxType = btn.dataset.type;
+  $$("#teTypeSeg .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  fillCategorySelect($("#teCategory"), editingTxType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+});
+
+$("#txEditClose").addEventListener("click", () => $("#txEditModal").classList.add("hidden"));
+$("#txEditModal").addEventListener("click", (e) => {
+  if (e.target.id === "txEditModal") $("#txEditModal").classList.add("hidden");
+});
+
+$("#txEditForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!editingTxId) return;
+  const amount = toAmount($("#teAmount").value);
+  if (amount <= 0) return;
+  const existing = state.transactions.find((t) => t.id === editingTxId);
+  if (!existing) return;
+  const updated = {
+    ...existing,
+    date: $("#teDate").value || existing.date,
+    amount,
+    type: editingTxType,
+    name: $("#teName").value.trim(),
+    category: $("#teCategory").value,
+    memo: $("#teMemo").value.trim(),
+  };
+  await store.put("transactions", updated);
+  Object.assign(existing, updated);
+  $("#txEditModal").classList.add("hidden");
+  $("#dayModal").classList.add("hidden");
+  state.viewYear = Number(updated.date.slice(0, 4));
+  state.viewMonth = Number(updated.date.slice(5, 7)) - 1;
+  renderCalendar();
+  if (currentView === "viewGraph") renderGraph();
+});
+
+$("#teDeleteBtn").addEventListener("click", () => {
+  if (!editingTxId) return;
+  const existing = state.transactions.find((t) => t.id === editingTxId);
+  if (!existing) return;
+  if (confirm(`「${existing.name || existing.category}」${yen(existing.amount)} を削除しますか？`)) {
+    deleteTransaction(editingTxId);
+  }
+});
 
 /* ---------------- Manual input ---------------- */
 
@@ -308,6 +414,12 @@ $("#typeSeg").addEventListener("click", (e) => {
 });
 fillCategorySelect($("#fCategory"), EXPENSE_CATEGORIES);
 $("#fDate").value = todayIso();
+
+$("#fName").addEventListener("change", () => {
+  if (manualType !== "expense") return;
+  const guess = autoCategory($("#fName").value.trim());
+  if (guess && EXPENSE_CATEGORIES.includes(guess)) $("#fCategory").value = guess;
+});
 
 $("#manualForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -353,6 +465,11 @@ $("#manualForm").addEventListener("submit", async (e) => {
 
 fillCategorySelect($("#rCategory"), EXPENSE_CATEGORIES);
 $("#rDate").value = todayIso();
+
+$("#rName").addEventListener("change", () => {
+  const guess = autoCategory($("#rName").value.trim());
+  if (guess && EXPENSE_CATEGORIES.includes(guess)) $("#rCategory").value = guess;
+});
 
 $("#receiptInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
@@ -463,7 +580,7 @@ function currentMapping() {
 function updateCsvPreview() {
   if (!csvParsed) return;
   const mapping = currentMapping();
-  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping);
+  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
   $("#csvCount").textContent = parsedTx.length;
 
   const previewRows = parsedTx.slice(0, 8);
@@ -478,7 +595,7 @@ function updateCsvPreview() {
 $("#importCsvBtn").addEventListener("click", async () => {
   if (!csvParsed) return;
   const mapping = currentMapping();
-  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping);
+  const parsedTx = rowsToTransactions(csvParsed.headers, csvParsed.rows, mapping, autoCategory);
   if (parsedTx.length === 0) { alert("取り込める行がありません"); return; }
   const records = parsedTx.map((r) => ({
     id: newId(),
@@ -488,7 +605,7 @@ $("#importCsvBtn").addEventListener("click", async () => {
     name: r.name,
     category: r.category,
     recurring: false,
-    source: "paypay",
+    source: "csv",
   }));
   await store.bulkPut("transactions", records);
   state.transactions.push(...records);
@@ -547,10 +664,48 @@ $("#subForm").addEventListener("submit", async (e) => {
   renderCalendar();
 });
 
+/* ---------------- Category rules (settings) ---------------- */
+
+function renderRuleList() {
+  const list = $("#ruleList");
+  list.innerHTML = "";
+  if (state.rules.length === 0) {
+    list.innerHTML = '<div class="hint">ルールはまだありません</div>';
+    return;
+  }
+  state.rules.forEach((r) => {
+    const row = document.createElement("div");
+    row.className = "sub-row";
+    row.innerHTML = `<div><div>${escapeHtml(r.keyword)}</div><div class="sub-meta">→ ${escapeHtml(r.category)}</div></div>`;
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "削除";
+    delBtn.addEventListener("click", async () => {
+      await store.delete("categoryRules", r.id);
+      state.rules = state.rules.filter((x) => x.id !== r.id);
+      renderRuleList();
+    });
+    row.appendChild(delBtn);
+    list.appendChild(row);
+  });
+}
+
+fillCategorySelect($("#ruleCategory"), ALL_CATEGORIES);
+
+$("#ruleForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const keyword = $("#ruleKeyword").value.trim();
+  if (!keyword) return;
+  const rule = { id: newId(), keyword, category: $("#ruleCategory").value };
+  await store.put("categoryRules", rule);
+  state.rules.push(rule);
+  e.target.reset();
+  renderRuleList();
+});
+
 /* ---------------- Data management ---------------- */
 
 $("#exportBtn").addEventListener("click", () => {
-  const payload = JSON.stringify({ transactions: state.transactions, subscriptions: state.subscriptions }, null, 2);
+  const payload = JSON.stringify({ transactions: state.transactions, subscriptions: state.subscriptions, categoryRules: state.rules }, null, 2);
   const blob = new Blob([payload], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -573,6 +728,9 @@ $("#importFile").addEventListener("change", async (e) => {
     }
     if (Array.isArray(data.subscriptions)) {
       await store.bulkPut("subscriptions", data.subscriptions);
+    }
+    if (Array.isArray(data.categoryRules)) {
+      await store.bulkPut("categoryRules", data.categoryRules);
     }
     await loadAll();
     alert("読み込みました");

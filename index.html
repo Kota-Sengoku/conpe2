@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4CC38A">
+<title>お金の記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <button id="prevMonthBtn" class="nav-arrow" aria-label="前の月">&#9664;</button>
+  <h1 id="monthLabel">2026年09月</h1>
+  <button id="nextMonthBtn" class="nav-arrow" aria-label="次の月">&#9654;</button>
+  <button id="searchBtn" class="search-btn" aria-label="検索">&#128269;</button>
+</header>
+
+<main id="viewCalendar" class="view">
+  <div class="calendar-wrap">
+    <div class="weekday-row">
+      <span class="wd sun">日</span><span class="wd">月</span><span class="wd">火</span>
+      <span class="wd">水</span><span class="wd">木</span><span class="wd">金</span><span class="wd sat">土</span>
+    </div>
+    <div id="calendarGrid" class="calendar-grid"></div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-cell">
+      <div class="summary-label">収入</div>
+      <div id="sumIncome" class="summary-value">0円</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-label">支出</div>
+      <div id="sumExpense" class="summary-value">0円</div>
+    </div>
+    <div class="summary-cell">
+      <div class="summary-label">合計</div>
+      <div id="sumTotal" class="summary-value">0円</div>
+    </div>
+  </div>
+
+  <div id="txList" class="tx-list"></div>
+</main>
+
+<main id="viewInput" class="view hidden">
+  <div class="panel">
+    <h2>手入力で追加</h2>
+    <form id="manualForm" class="form">
+      <div class="seg" id="typeSeg">
+        <button type="button" class="seg-btn active" data-type="expense">支出</button>
+        <button type="button" class="seg-btn" data-type="income">収入</button>
+      </div>
+      <label>日付<input type="date" id="fDate" required></label>
+      <label>金額（円）<input type="number" id="fAmount" min="0" required placeholder="例）580"></label>
+      <label>内容・お店<input type="text" id="fName" placeholder="例）スーパー〇〇"></label>
+      <label>カテゴリ
+        <select id="fCategory"></select>
+      </label>
+      <label>メモ<input type="text" id="fMemo" placeholder="任意"></label>
+      <label class="check-line"><input type="checkbox" id="fRecurring"> 毎月自動で追加する（サブスクなど）</label>
+      <button type="submit" class="primary-btn">追加する</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>レシート写真から追加（自動OCR）</h2>
+    <p class="hint">レシートを撮影 or 選択すると、金額の候補を自動で読み取ります。読み取り結果は必ず確認してください。</p>
+    <input type="file" id="receiptInput" accept="image/*" capture="environment">
+    <div id="ocrStatus" class="hint"></div>
+    <img id="ocrPreview" class="ocr-preview hidden">
+    <div id="ocrCandidates" class="ocr-candidates hidden">
+      <div class="hint">金額の候補（タップで選択）</div>
+      <div id="ocrAmountChips" class="chip-row"></div>
+      <label>日付<input type="date" id="rDate"></label>
+      <label>お店・内容<input type="text" id="rName" placeholder="例）コンビニ"></label>
+      <label>カテゴリ<select id="rCategory"></select></label>
+      <label>金額（円）<input type="number" id="rAmount" min="0"></label>
+      <button type="button" id="saveReceiptBtn" class="primary-btn">この内容で追加する</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>PayPayの利用明細CSVを取り込む</h2>
+    <p class="hint">
+      PayPayアプリ →「くらしのマネー管理」→ 利用履歴の書き出し（CSV）でファイルを取得し、ここで選択してください。
+      列を自動検出してまとめて取り込みます（公式APIが無いため、CSVからの一括取込が最も確実な自動化方法です）。
+    </p>
+    <input type="file" id="csvInput" accept=".csv,text/csv">
+    <div id="csvStatus" class="hint"></div>
+    <div id="csvMapWrap" class="hidden">
+      <div class="map-row">
+        <label>日付の列<select id="mapDate"></select></label>
+        <label>支出金額の列<select id="mapExpense"></select></label>
+        <label>収入金額の列<select id="mapIncome"></select></label>
+        <label>内容・お店の列<select id="mapName"></select></label>
+      </div>
+      <div id="csvPreview" class="csv-preview"></div>
+      <button type="button" id="importCsvBtn" class="primary-btn">この内容で一括取り込む（<span id="csvCount">0</span>件）</button>
+    </div>
+  </div>
+</main>
+
+<main id="viewGraph" class="view hidden">
+  <div class="panel">
+    <h2 id="graphMonthLabel">今月のカテゴリ別支出</h2>
+    <canvas id="categoryChart" height="220"></canvas>
+    <div id="categoryLegend" class="legend"></div>
+  </div>
+  <div class="panel">
+    <h2>月ごとの推移（直近6か月）</h2>
+    <canvas id="trendChart" height="200"></canvas>
+  </div>
+</main>
+
+<main id="viewSettings" class="view hidden">
+  <div class="panel">
+    <h2>毎月の自動サブスク</h2>
+    <div id="subList" class="sub-list"></div>
+    <form id="subForm" class="form">
+      <label>名前<input type="text" id="sName" placeholder="例）Spotify" required></label>
+      <label>金額（円）<input type="number" id="sAmount" min="0" required></label>
+      <label>毎月の日にち<input type="number" id="sDay" min="1" max="28" value="1" required></label>
+      <button type="submit" class="primary-btn">サブスクを追加</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>データ管理</h2>
+    <p class="hint">この記録はこの端末のブラウザ内だけに保存されます（自分専用・非公開）。</p>
+    <button id="exportBtn" class="secondary-btn">バックアップを書き出す（JSON）</button>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+    <button id="importBtn" class="secondary-btn">バックアップを読み込む</button>
+    <button id="clearBtn" class="danger-btn">すべてのデータを削除</button>
+  </div>
+
+  <div class="panel">
+    <h2>ホーム画面に追加</h2>
+    <p class="hint">Safari/Chromeの共有メニューから「ホーム画面に追加」を選ぶと、アプリのように使えます。</p>
+  </div>
+</main>
+
+<nav class="bottom-nav">
+  <button class="nav-btn" data-view="viewInput">
+    <span class="nav-icon">&#9998;</span><span>入力</span>
+  </button>
+  <button class="nav-btn active" data-view="viewCalendar">
+    <span class="nav-icon">&#128197;</span><span>カレンダー</span>
+  </button>
+  <button class="nav-btn" data-view="viewGraph">
+    <span class="nav-icon">&#128202;</span><span>グラフ</span>
+  </button>
+  <button class="nav-btn" data-view="viewSettings">
+    <span class="nav-icon">&#9881;</span><span>設定</span>
+  </button>
+</nav>
+
+<div id="dayModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="dayModalTitle"></h3>
+      <button id="dayModalClose" class="icon-btn">&times;</button>
+    </div>
+    <div id="dayModalList" class="tx-list"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -66,18 +66,21 @@ export function toIsoDate(str) {
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-// Point grants/point payments (e.g. "PayPayポイント付与") aren't real money
-// movement, so they're excluded from income/expense totals on import.
-export function isPointRow(name) {
-  return /ポイント/.test(name || "");
+// Point grants/payments and investment (資産運用) transfers aren't everyday
+// income/expense, so they're excluded from the totals on import.
+const EXCLUDE_KEYWORDS = ["ポイント", "投資", "資産運用"];
+
+export function isExcludedRow(name) {
+  const s = name || "";
+  return EXCLUDE_KEYWORDS.some((k) => s.includes(k));
 }
 
 // `categorizeFn(name)` should return a category string or null/undefined
 // when no rule matches; `defaultCategory` is used as the fallback.
-// Returns { transactions, excludedPointCount }.
+// Returns { transactions, excludedCount }.
 export function rowsToTransactions(headers, rows, mapping, categorizeFn, defaultCategory = "その他") {
   const out = [];
-  let excludedPointCount = 0;
+  let excludedCount = 0;
   for (const r of rows) {
     const dateRaw = mapping.date >= 0 ? r[mapping.date] : "";
     const date = toIsoDate(dateRaw);
@@ -85,8 +88,8 @@ export function rowsToTransactions(headers, rows, mapping, categorizeFn, default
     const expenseAmt = mapping.expense >= 0 ? toAmount(r[mapping.expense]) : 0;
     const incomeAmt = mapping.income >= 0 ? toAmount(r[mapping.income]) : 0;
     const name = (mapping.name >= 0 ? r[mapping.name] : "") || "取込データ";
-    if (isPointRow(name)) {
-      if (expenseAmt > 0 || incomeAmt > 0) excludedPointCount++;
+    if (isExcludedRow(name)) {
+      if (expenseAmt > 0 || incomeAmt > 0) excludedCount++;
       continue;
     }
     const category = (categorizeFn && categorizeFn(name)) || defaultCategory;
@@ -96,5 +99,5 @@ export function rowsToTransactions(headers, rows, mapping, categorizeFn, default
       out.push({ date, amount: incomeAmt, type: "income", name, category: "その他" });
     }
   }
-  return { transactions: out, excludedPointCount };
+  return { transactions: out, excludedCount };
 }

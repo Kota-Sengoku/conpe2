@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No Shorts Tube</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>No Shorts Tube <span class="subtitle">ショート動画なしのYouTube</span></h1>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="home">ホーム</button>
+    <button class="tab-btn" data-tab="search">検索</button>
+  </nav>
+  <button id="settingsBtn" class="icon-btn" title="設定">⚙ 設定</button>
+</header>
+
+<section id="settingsPanel" class="settings-panel hidden">
+  <h2>設定</h2>
+
+  <div class="field">
+    <label for="apiKeyInput">YouTube Data API キー</label>
+    <div class="row">
+      <input type="password" id="apiKeyInput" placeholder="AIza... を入力">
+      <button id="saveApiKeyBtn">保存</button>
+      <button id="toggleApiKeyVisBtn" type="button">表示</button>
+    </div>
+    <p class="hint">
+      APIキーはこの端末のブラウザ内(localStorage)にのみ保存され、外部には送信されません。
+      未取得の場合は <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Google Cloud Console</a>
+      で「YouTube Data API v3」を有効化し、APIキーを発行してください。
+    </p>
+  </div>
+
+  <div class="field">
+    <label for="shortsModeSelect">ショート判定モード</label>
+    <select id="shortsModeSelect">
+      <option value="duration">動画の長さで判定(60秒以下を除外・高速)</option>
+      <option value="oembed">/shorts/ URLで厳密判定(やや低速・API呼び出し増)</option>
+    </select>
+    <p class="hint">
+      YouTube Data APIには「ショートかどうか」を直接返す項目がないため、この2通りの近似判定から選べます。
+      「動画の長さ」判定は60秒以下の動画のみ除外するため、60秒超のショートは残る場合があります。
+      「/shorts/ URL判定」はYouTube側の内部ページを1本ずつ確認するためより正確ですが、動画数が多いと時間がかかります。
+    </p>
+  </div>
+
+  <div class="field">
+    <label for="channelInput">チャンネルを登録(おすすめフィードの元になります)</label>
+    <div class="row">
+      <input type="text" id="channelInput" placeholder="チャンネル名 / @ハンドル / チャンネルURL / チャンネルID">
+      <button id="addChannelBtn">追加</button>
+    </div>
+    <ul id="channelList" class="channel-list"></ul>
+  </div>
+</section>
+
+<main>
+  <section id="homeTab" class="tab-panel">
+    <div class="panel-header">
+      <h2>登録チャンネルの新着(ショート除外)</h2>
+      <button id="refreshHomeBtn">更新</button>
+    </div>
+    <p id="homeMessage" class="message"></p>
+    <div id="homeGrid" class="video-grid"></div>
+    <button id="loadMoreHomeBtn" class="load-more hidden">もっと見る</button>
+  </section>
+
+  <section id="searchTab" class="tab-panel hidden">
+    <div class="panel-header">
+      <form id="searchForm" class="search-form">
+        <input type="text" id="searchInput" placeholder="キーワードを入力して検索">
+        <button type="submit">検索</button>
+      </form>
+    </div>
+    <p id="searchMessage" class="message"></p>
+    <div id="searchGrid" class="video-grid"></div>
+    <button id="loadMoreSearchBtn" class="load-more hidden">もっと見る</button>
+  </section>
+</main>
+
+<div id="playerModal" class="player-modal hidden">
+  <div class="player-modal-inner">
+    <button id="closePlayerBtn" class="close-btn">✕ 閉じる</button>
+    <div id="playerContainer"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

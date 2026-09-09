@@ -27,6 +27,7 @@ function yen(n) {
 
 const LS_LAST_IMPORT = "paypayLastImportDate";
 const LS_DISMISSED = "paypayReminderDismissedDate";
+const LS_INITIAL_BALANCE = "initialBalance";
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
@@ -198,6 +199,7 @@ async function renderCalendar() {
 
   renderSummary(year, month);
   renderTxList(year, month);
+  renderSavings();
   checkPaypayReminder();
 }
 
@@ -233,6 +235,17 @@ function renderSummary(year, month) {
   $("#sumIncome").textContent = yen(income);
   $("#sumExpense").textContent = yen(expense);
   $("#sumTotal").textContent = `${income - expense < 0 ? "-" : ""}${yen(Math.abs(income - expense)).replace("円", "")}円`;
+}
+
+// Savings = initial balance + all-time net (income - expense), independent
+// of which month the calendar happens to be showing.
+function renderSavings() {
+  const initial = Number(localStorage.getItem(LS_INITIAL_BALANCE)) || 0;
+  const net = state.transactions.reduce((s, t) => s + (t.type === "income" ? t.amount : -t.amount), 0);
+  const savings = initial + net;
+  const el = $("#savingsAmount");
+  el.textContent = yen(savings);
+  el.classList.toggle("negative", savings < 0);
 }
 
 function weekdayLabel(dateStr) {
@@ -703,6 +716,18 @@ $("#ruleForm").addEventListener("submit", async (e) => {
   state.rules.push(rule);
   e.target.reset();
   renderRuleList();
+});
+
+/* ---------------- Initial balance (savings) ---------------- */
+
+$("#initialBalance").value = Number(localStorage.getItem(LS_INITIAL_BALANCE)) || 0;
+
+$("#balanceForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = toAmount($("#initialBalance").value) || 0;
+  localStorage.setItem(LS_INITIAL_BALANCE, String(value));
+  renderSavings();
+  alert("保存しました");
 });
 
 /* ---------------- Data management ---------------- */

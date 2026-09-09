@@ -27,6 +27,10 @@
       <button id="reminderDismissBtn" type="button" class="icon-btn" aria-label="閉じる">&times;</button>
     </div>
   </div>
+  <div class="savings-banner">
+    <span class="savings-label">貯金額</span>
+    <span id="savingsAmount" class="savings-value">0円</span>
+  </div>
   <div class="calendar-wrap">
     <div class="weekday-row">
       <span class="wd sun">日</span><span class="wd">月</span><span class="wd">火</span>
@@ -152,6 +156,18 @@
         <select id="ruleCategory"></select>
       </label>
       <button type="submit" class="primary-btn">ルールを追加</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>貯金額の計算</h2>
+    <p class="hint">
+      「貯金額」は、この初期残高に、これまで記録した収入・支出の差し引きを足して計算します
+      （ポイント・投資として除外した明細は含みません）。実際の口座残高に合わせたいときに入力してください。
+    </p>
+    <form id="balanceForm" class="form">
+      <label>初期残高（円）<input type="number" id="initialBalance" value="0"></label>
+      <button type="submit" class="primary-btn">保存する</button>
     </form>
   </div>
 

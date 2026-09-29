@@ -568,8 +568,8 @@ $("#csvInput").addEventListener("change", async (e) => {
   const guess = guessColumns(headers);
   $("#csvStatus").textContent = `${rows.length}件の行を検出しました。列の対応を確認してください。`;
 
-  ["mapDate", "mapExpense", "mapIncome", "mapName"].forEach((id, i) => {
-    const key = ["date", "expense", "income", "name"][i];
+  ["mapDate", "mapExpense", "mapIncome", "mapName", "mapType"].forEach((id, i) => {
+    const key = ["date", "expense", "income", "name", "type"][i];
     const sel = $(`#${id}`);
     sel.innerHTML = '<option value="-1">（使用しない）</option>' +
       headers.map((h, idx) => `<option value="${idx}">${escapeHtml(h)}</option>`).join("");
@@ -587,6 +587,7 @@ function currentMapping() {
     expense: Number($("#mapExpense").value),
     income: Number($("#mapIncome").value),
     name: Number($("#mapName").value),
+    type: Number($("#mapType").value),
   };
 }
 
@@ -620,6 +621,7 @@ $("#importCsvBtn").addEventListener("click", async () => {
     type: r.type,
     name: r.name,
     category: r.category,
+    memo: r.memo || "",
     recurring: false,
     source: "csv",
   }));

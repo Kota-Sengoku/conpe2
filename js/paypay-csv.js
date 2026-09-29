@@ -38,9 +38,14 @@ export function parseCsv(text) {
   return { headers, rows };
 }
 
+// Keyword order is the priority order: the first keyword with any match
+// wins, so put more specific/preferred column names first.
 function findColumn(headers, keywords) {
-  const idx = headers.findIndex((h) => keywords.some((k) => h.includes(k)));
-  return idx;
+  for (const k of keywords) {
+    const idx = headers.findIndex((h) => h.includes(k));
+    if (idx >= 0) return idx;
+  }
+  return -1;
 }
 
 export function guessColumns(headers) {
@@ -48,7 +53,12 @@ export function guessColumns(headers) {
     date: findColumn(headers, ["利用日", "取引日", "日付", "日時", "ご利用日", "取引年月日"]),
     expense: findColumn(headers, ["出金", "支出", "利用金額", "ご利用金額", "お支払い金額", "お支払金額"]),
     income: findColumn(headers, ["入金", "受取", "お預かり金額", "お預り金額"]),
-    name: findColumn(headers, ["取引内容", "取引先", "内容", "店", "摘要", "ご利用店名"]),
+    // "取引先"（お店・相手の名前）が最優先。PayPayのCSVには「取引内容」（支払い/
+    // 投資など種別のみ）も別列であるが、そちらは具体的な相手先ではないので後回し。
+    name: findColumn(headers, ["取引先", "ご利用店名", "摘要", "店", "取引内容", "内容"]),
+    // 取引の種類（支払い/投資/ポイント、残高の獲得 など）。ポイント・投資の除外
+    // 判定に使う。無ければ使わない（-1）。
+    type: findColumn(headers, ["取引内容", "取引区分", "種別"]),
   };
 }
 
@@ -88,15 +98,16 @@ export function rowsToTransactions(headers, rows, mapping, categorizeFn, default
     const expenseAmt = mapping.expense >= 0 ? toAmount(r[mapping.expense]) : 0;
     const incomeAmt = mapping.income >= 0 ? toAmount(r[mapping.income]) : 0;
     const name = (mapping.name >= 0 ? r[mapping.name] : "") || "取込データ";
-    if (isExcludedRow(name)) {
+    const typeText = mapping.type >= 0 ? r[mapping.type] : "";
+    if (isExcludedRow(name) || isExcludedRow(typeText)) {
       if (expenseAmt > 0 || incomeAmt > 0) excludedCount++;
       continue;
     }
     const category = (categorizeFn && categorizeFn(name)) || defaultCategory;
     if (expenseAmt > 0) {
-      out.push({ date, amount: expenseAmt, type: "expense", name, category });
+      out.push({ date, amount: expenseAmt, type: "expense", name, category, memo: name });
     } else if (incomeAmt > 0) {
-      out.push({ date, amount: incomeAmt, type: "income", name, category: "その他" });
+      out.push({ date, amount: incomeAmt, type: "income", name, category: "その他", memo: name });
     }
   }
   return { transactions: out, excludedCount };

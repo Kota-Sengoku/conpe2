@@ -135,7 +135,19 @@ body {
 .weekday-row .sun { color: var(--red); }
 .weekday-row .sat { color: var(--blue); }
 
-.calendar-grid {
+.calendar-viewport {
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+}
+.calendar-track {
+  display: flex;
+  width: 300%;
+  transition: transform 0.25s ease;
+}
+.month-panel {
+  width: 33.3333%;
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
 }

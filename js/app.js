@@ -213,13 +213,15 @@ function dayTransactionsMap(year, month) {
   return map;
 }
 
-async function renderCalendar() {
-  await ensureRecurringForMonth(state.viewYear, state.viewMonth);
+function addMonths(year, month, delta) {
+  const d = new Date(year, month + delta, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
 
-  const grid = $("#calendarGrid");
-  grid.innerHTML = "";
-  const year = state.viewYear;
-  const month = state.viewMonth;
+function buildMonthGrid(year, month) {
+  const panel = document.createElement("div");
+  panel.className = "month-panel";
+
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
@@ -276,8 +278,35 @@ async function renderCalendar() {
     if (!c.other) {
       div.addEventListener("click", () => openDayModal(dateStr));
     }
-    grid.appendChild(div);
+    panel.appendChild(div);
   });
+
+  return panel;
+}
+
+async function renderCalendar() {
+  const year = state.viewYear;
+  const month = state.viewMonth;
+  const prev = addMonths(year, month, -1);
+  const next = addMonths(year, month, 1);
+
+  await ensureRecurringForMonth(prev.year, prev.month);
+  await ensureRecurringForMonth(year, month);
+  await ensureRecurringForMonth(next.year, next.month);
+
+  const track = $("#calendarTrack");
+  track.innerHTML = "";
+  track.appendChild(buildMonthGrid(prev.year, prev.month));
+  track.appendChild(buildMonthGrid(year, month));
+  track.appendChild(buildMonthGrid(next.year, next.month));
+
+  // Snap the track back to the centered (current month) position instantly,
+  // with no transition, so the swipe-drag carousel below always starts from
+  // a clean base each time the calendar re-renders.
+  track.style.transition = "none";
+  track.style.transform = "translateX(calc(-33.3333% + 0px))";
+  track.offsetHeight; // force reflow
+  track.style.transition = "";
 
   renderSummary(year, month);
   renderTxList(year, month);
@@ -415,8 +444,77 @@ function attachSwipeNav(el) {
     changeMonth(dx < 0 ? 1 : -1);
   }, { passive: true });
 }
-attachSwipeNav($("#viewCalendar"));
 attachSwipeNav($("#viewGraph"));
+
+// Calendar month carousel: the track follows the finger 1:1 while dragging,
+// then either finishes the swipe into the next/previous month or springs
+// back, instead of jumping straight to the next month on any swipe.
+function attachCalendarCarousel(viewport, track) {
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+  let dragging = false;
+  let horizontal = null; // null = undecided yet, true/false once determined
+  let width = 0;
+  let animating = false;
+
+  function setTransform(px, withTransition) {
+    track.style.transition = withTransition ? "" : "none";
+    track.style.transform = `translateX(calc(-33.3333% + ${px}px))`;
+  }
+
+  function settle(px, delta) {
+    animating = true;
+    setTransform(px, true);
+    track.addEventListener("transitionend", function onEnd(e) {
+      if (e.propertyName !== "transform") return;
+      track.removeEventListener("transitionend", onEnd);
+      animating = false;
+      if (delta) changeMonth(delta);
+    }, { once: true });
+  }
+
+  viewport.addEventListener("touchstart", (e) => {
+    if (animating || e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    dx = 0;
+    dragging = true;
+    horizontal = null;
+    width = viewport.clientWidth;
+  }, { passive: true });
+
+  viewport.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    const curX = e.touches[0].clientX;
+    const curY = e.touches[0].clientY;
+    dx = curX - startX;
+    const dy = curY - startY;
+
+    if (horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      horizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (horizontal) {
+      e.preventDefault();
+      setTransform(dx, false);
+    }
+  }, { passive: false });
+
+  viewport.addEventListener("touchend", () => {
+    if (!dragging) return;
+    dragging = false;
+    if (!horizontal) return;
+    const threshold = Math.max(50, width * 0.22);
+    if (dx <= -threshold) {
+      settle(-width, 1);
+    } else if (dx >= threshold) {
+      settle(width, -1);
+    } else {
+      settle(0, null);
+    }
+  }, { passive: true });
+}
+attachCalendarCarousel($("#calendarViewport"), $("#calendarTrack"));
 
 async function deleteTransaction(id) {
   await store.delete("transactions", id);

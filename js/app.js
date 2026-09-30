@@ -6,6 +6,8 @@ import { DEFAULT_RULES, matchCategory } from "./categorize.js";
 const EXPENSE_CATEGORIES = ["食費", "日用品", "交通費", "娯楽", "サブスク", "医療", "交際費", "その他"];
 const INCOME_CATEGORIES = ["給料", "お小遣い", "その他"];
 const ALL_CATEGORIES = [...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES])];
+const ADD_CATEGORY_VALUE = "__add__";
+const LS_CUSTOM_CATEGORIES = "customCategories";
 
 const state = {
   today: new Date(),
@@ -14,12 +16,84 @@ const state = {
   transactions: [],
   subscriptions: [],
   rules: [],
+  customCategories: [],
 };
+
+function loadCustomCategories() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_CUSTOM_CATEGORIES) || "[]");
+    state.customCategories = Array.isArray(raw) ? raw : [];
+  } catch {
+    state.customCategories = [];
+  }
+}
+
+function saveCustomCategories() {
+  localStorage.setItem(LS_CUSTOM_CATEGORIES, JSON.stringify(state.customCategories));
+}
+
+function mergeCategories(base) {
+  const extra = state.customCategories.filter((c) => !base.includes(c));
+  return [...base, ...extra];
+}
+
+function expenseCategories() { return mergeCategories(EXPENSE_CATEGORIES); }
+function incomeCategories() { return mergeCategories(INCOME_CATEGORIES); }
+function allCategoriesList() { return mergeCategories(ALL_CATEGORIES); }
+
+function addCustomCategory(name) {
+  if (!state.customCategories.includes(name)) {
+    state.customCategories.push(name);
+    saveCustomCategories();
+  }
+}
 state.viewYear = state.today.getFullYear();
 state.viewMonth = state.today.getMonth();
+loadCustomCategories();
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+/* ---------------- Category select helper ---------------- */
+
+function fillCategorySelect(sel, list) {
+  sel.innerHTML = list.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("") +
+    `<option value="${ADD_CATEGORY_VALUE}">＋ 新しいカテゴリを追加</option>`;
+}
+
+// Wire up a select (already populated via fillCategorySelect) so choosing the
+// trailing "add" option prompts for a new category, saves it, and re-selects
+// it. `getList` recomputes the base list at add-time (it may depend on a
+// 支出/収入 toggle that can change between calls).
+// Every category select registers itself here so that adding a category from
+// any one of them (manual entry, receipt, edit modal, rules) immediately
+// shows up in all the others too, not just after a reload.
+const categorySelects = [];
+
+function refreshAllCategorySelects() {
+  for (const { sel, getList } of categorySelects) {
+    const prevValue = sel.value;
+    fillCategorySelect(sel, getList());
+    if (Array.from(sel.options).some((o) => o.value === prevValue)) {
+      sel.value = prevValue;
+    }
+  }
+}
+
+function setupCategoryAddOption(sel, getList) {
+  categorySelects.push({ sel, getList });
+  sel.addEventListener("change", () => {
+    if (sel.value !== ADD_CATEGORY_VALUE) return;
+    const name = (prompt("追加するカテゴリ名を入力してください") || "").trim();
+    if (!name) {
+      sel.value = getList()[0] || "";
+      return;
+    }
+    addCustomCategory(name);
+    refreshAllCategorySelects();
+    sel.value = name;
+  });
+}
 
 function yen(n) {
   return `${Math.round(n).toLocaleString("ja-JP")}円`;
@@ -362,7 +436,7 @@ function openTxEditModal(t) {
   editingTxId = t.id;
   editingTxType = t.type;
   $$("#teTypeSeg .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.type === t.type));
-  fillCategorySelect($("#teCategory"), t.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  fillCategorySelect($("#teCategory"), t.type === "expense" ? expenseCategories() : incomeCategories());
   $("#teDate").value = t.date;
   $("#teAmount").value = t.amount;
   $("#teName").value = t.name || "";
@@ -376,8 +450,9 @@ $("#teTypeSeg").addEventListener("click", (e) => {
   if (!btn) return;
   editingTxType = btn.dataset.type;
   $$("#teTypeSeg .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
-  fillCategorySelect($("#teCategory"), editingTxType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  fillCategorySelect($("#teCategory"), editingTxType === "expense" ? expenseCategories() : incomeCategories());
 });
+setupCategoryAddOption($("#teCategory"), () => editingTxType === "expense" ? expenseCategories() : incomeCategories());
 
 $("#txEditClose").addEventListener("click", () => $("#txEditModal").classList.add("hidden"));
 $("#txEditModal").addEventListener("click", (e) => {
@@ -421,25 +496,22 @@ $("#teDeleteBtn").addEventListener("click", () => {
 
 /* ---------------- Manual input ---------------- */
 
-function fillCategorySelect(sel, list) {
-  sel.innerHTML = list.map((c) => `<option value="${c}">${c}</option>`).join("");
-}
-
 let manualType = "expense";
 $("#typeSeg").addEventListener("click", (e) => {
   const btn = e.target.closest(".seg-btn");
   if (!btn) return;
   manualType = btn.dataset.type;
   $$("#typeSeg .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
-  fillCategorySelect($("#fCategory"), manualType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  fillCategorySelect($("#fCategory"), manualType === "expense" ? expenseCategories() : incomeCategories());
 });
-fillCategorySelect($("#fCategory"), EXPENSE_CATEGORIES);
+fillCategorySelect($("#fCategory"), expenseCategories());
+setupCategoryAddOption($("#fCategory"), () => manualType === "expense" ? expenseCategories() : incomeCategories());
 $("#fDate").value = todayIso();
 
 $("#fName").addEventListener("change", () => {
   if (manualType !== "expense") return;
   const guess = autoCategory($("#fName").value.trim());
-  if (guess && EXPENSE_CATEGORIES.includes(guess)) $("#fCategory").value = guess;
+  if (guess && expenseCategories().includes(guess)) $("#fCategory").value = guess;
 });
 
 $("#manualForm").addEventListener("submit", async (e) => {
@@ -475,7 +547,7 @@ $("#manualForm").addEventListener("submit", async (e) => {
 
   e.target.reset();
   $("#fDate").value = todayIso();
-  fillCategorySelect($("#fCategory"), manualType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES);
+  fillCategorySelect($("#fCategory"), manualType === "expense" ? expenseCategories() : incomeCategories());
   alert("追加しました");
   state.viewYear = Number(t.date.slice(0, 4));
   state.viewMonth = Number(t.date.slice(5, 7)) - 1;
@@ -484,12 +556,13 @@ $("#manualForm").addEventListener("submit", async (e) => {
 
 /* ---------------- Receipt OCR ---------------- */
 
-fillCategorySelect($("#rCategory"), EXPENSE_CATEGORIES);
+fillCategorySelect($("#rCategory"), expenseCategories());
+setupCategoryAddOption($("#rCategory"), () => expenseCategories());
 $("#rDate").value = todayIso();
 
 $("#rName").addEventListener("change", () => {
   const guess = autoCategory($("#rName").value.trim());
-  if (guess && EXPENSE_CATEGORIES.includes(guess)) $("#rCategory").value = guess;
+  if (guess && expenseCategories().includes(guess)) $("#rCategory").value = guess;
 });
 
 $("#receiptInput").addEventListener("change", async (e) => {
@@ -715,7 +788,8 @@ function renderRuleList() {
   });
 }
 
-fillCategorySelect($("#ruleCategory"), ALL_CATEGORIES);
+fillCategorySelect($("#ruleCategory"), allCategoriesList());
+setupCategoryAddOption($("#ruleCategory"), () => allCategoriesList());
 
 $("#ruleForm").addEventListener("submit", async (e) => {
   e.preventDefault();

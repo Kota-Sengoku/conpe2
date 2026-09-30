@@ -2,6 +2,7 @@
   --green: #4CC38A;
   --green-dark: #38A672;
   --green-light: #E4F8EE;
+  --header-bg: #74CFA2;
   --red: #E0453D;
   --blue: #3B6FE0;
   --text: #222;
@@ -33,13 +34,13 @@ body {
 
 /* Header */
 .app-header {
-  background: linear-gradient(180deg, var(--green), var(--green-dark));
+  background: var(--header-bg);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 18px;
-  padding: 14px 16px calc(14px + env(safe-area-inset-top, 0px));
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
   position: relative;
 }
 .app-header h1 {
@@ -64,13 +65,16 @@ body {
   transform: translateY(-50%);
   width: 40px;
   height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   border: none;
   background: rgba(255,255,255,0.25);
   color: #fff;
-  font-size: 1.05rem;
   cursor: pointer;
 }
+.search-icon { width: 20px; height: 20px; }
 
 /* Reminder banner */
 .reminder-banner {
@@ -136,7 +140,7 @@ body {
   grid-template-columns: repeat(7, 1fr);
 }
 .day-cell {
-  min-height: 62px;
+  min-height: 74px;
   padding: 6px 4px;
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -159,15 +163,29 @@ body {
   border-radius: 4px;
   padding: 0 4px;
 }
-.day-cell .day-amount {
-  display: block;
+.day-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+}
+.day-entry {
   text-align: right;
   color: var(--red);
-  font-size: 0.78rem;
-  margin-top: 18px;
+  font-size: 0.58rem;
+  line-height: 1.2;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.day-cell .day-amount.income { color: var(--green-dark); }
+.day-entry.income { color: var(--green-dark); }
+.day-more {
+  text-align: right;
+  color: var(--sub-text);
+  font-size: 0.55rem;
+  line-height: 1.2;
+}
 
 /* Summary */
 .summary-row {

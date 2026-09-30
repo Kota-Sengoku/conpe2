@@ -126,14 +126,17 @@ function monthTransactions(year, month) {
   return state.transactions.filter((t) => t.date.startsWith(prefix));
 }
 
-function dayTotals(year, month) {
-  const totals = {};
+function dayTransactionsMap(year, month) {
+  const map = {};
   for (const t of monthTransactions(year, month)) {
     const day = Number(t.date.slice(8, 10));
-    if (!totals[day]) totals[day] = { income: 0, expense: 0 };
-    totals[day][t.type] += t.amount;
+    if (!map[day]) map[day] = [];
+    map[day].push(t);
   }
-  return totals;
+  for (const day in map) {
+    map[day].sort((a, b) => b.amount - a.amount);
+  }
+  return map;
 }
 
 async function renderCalendar() {
@@ -146,7 +149,7 @@ async function renderCalendar() {
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
-  const totals = dayTotals(year, month);
+  const txByDay = dayTransactionsMap(year, month);
   const todayStr = todayIso();
 
   const cells = [];
@@ -176,19 +179,24 @@ async function renderCalendar() {
     num.textContent = c.day;
     div.appendChild(num);
 
-    if (!c.other && totals[c.day]) {
-      const t = totals[c.day];
-      if (t.expense > 0) {
-        const amt = document.createElement("span");
-        amt.className = "day-amount";
-        amt.textContent = yen(t.expense);
-        div.appendChild(amt);
-      } else if (t.income > 0) {
-        const amt = document.createElement("span");
-        amt.className = "day-amount income";
-        amt.textContent = yen(t.income);
-        div.appendChild(amt);
+    if (!c.other && txByDay[c.day]) {
+      const dayTxs = txByDay[c.day];
+      const entriesEl = document.createElement("div");
+      entriesEl.className = "day-entries";
+      const maxShown = 3;
+      dayTxs.slice(0, maxShown).forEach((t) => {
+        const entry = document.createElement("div");
+        entry.className = `day-entry ${t.type === "income" ? "income" : ""}`;
+        entry.textContent = yen(t.amount);
+        entriesEl.appendChild(entry);
+      });
+      if (dayTxs.length > maxShown) {
+        const more = document.createElement("div");
+        more.className = "day-more";
+        more.textContent = `+${dayTxs.length - maxShown}件`;
+        entriesEl.appendChild(more);
       }
+      div.appendChild(entriesEl);
     }
 
     if (!c.other) {

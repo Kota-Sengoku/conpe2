@@ -102,6 +102,14 @@ function yen(n) {
 const LS_LAST_IMPORT = "paypayLastImportDate";
 const LS_DISMISSED = "paypayReminderDismissedDate";
 const LS_INITIAL_BALANCE = "initialBalance";
+const LS_WEEK_START = "weekStart";
+
+function getWeekStart() {
+  return Number(localStorage.getItem(LS_WEEK_START)) === 1 ? 1 : 0;
+}
+function setWeekStart(value) {
+  localStorage.setItem(LS_WEEK_START, String(value));
+}
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 function isoDate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
@@ -177,7 +185,13 @@ function switchView(viewId) {
     ? `${state.viewYear}年${pad2(state.viewMonth + 1)}月`
     : { viewInput: "入力", viewSettings: "設定" }[viewId];
   if (viewId === "viewGraph") renderGraph();
-  if (viewId === "viewSettings") { renderSubscriptionList(); renderRuleList(); }
+  if (viewId === "viewSettings") {
+    showSettingsList();
+    renderSubscriptionList();
+    renderRuleList();
+    renderWeekStartChoices();
+    renderSettingsSummaries();
+  }
 }
 
 function changeMonth(delta) {
@@ -218,45 +232,51 @@ function addMonths(year, month, delta) {
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
+function renderWeekdayRow() {
+  const weekStart = getWeekStart();
+  const labels = ["日", "月", "火", "水", "木", "金", "土"];
+  const ordered = labels.slice(weekStart).concat(labels.slice(0, weekStart));
+  $("#weekdayRow").innerHTML = ordered.map((label, i) => {
+    const realDow = (weekStart + i) % 7;
+    const cls = realDow === 0 ? " sun" : realDow === 6 ? " sat" : "";
+    return `<span class="wd${cls}">${label}</span>`;
+  }).join("");
+}
+
 function buildMonthGrid(year, month) {
   const panel = document.createElement("div");
   panel.className = "month-panel";
 
-  const firstDow = new Date(year, month, 1).getDay();
+  const weekStart = getWeekStart();
+  const rawFirstDow = new Date(year, month, 1).getDay();
+  const leading = (rawFirstDow - weekStart + 7) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const startDate = new Date(year, month, 1 - leading);
+
   const txByDay = dayTransactionsMap(year, month);
   const todayStr = todayIso();
 
-  const cells = [];
-  for (let i = 0; i < firstDow; i++) {
-    cells.push({ day: daysInPrevMonth - firstDow + 1 + i, other: true });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ day: d, other: false });
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push({ day: cells.length - firstDow - daysInMonth + 1, other: true, trailing: true });
-  }
+  for (let i = 0; i < totalCells; i++) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+    const isOther = d.getMonth() !== month;
+    const dow = d.getDay();
+    const dateStr = isoDate(d.getFullYear(), d.getMonth(), d.getDate());
 
-  cells.forEach((c, idx) => {
-    const dow = idx % 7;
     const div = document.createElement("div");
     div.className = "day-cell";
-    if (c.other) div.classList.add("other-month");
+    if (isOther) div.classList.add("other-month");
     if (dow === 0) div.classList.add("sunday");
     if (dow === 6) div.classList.add("saturday");
-
-    const dateStr = c.other ? null : isoDate(year, month, c.day);
     if (dateStr === todayStr) div.classList.add("today");
 
     const num = document.createElement("span");
     num.className = "day-num";
-    num.textContent = c.day;
+    num.textContent = d.getDate();
     div.appendChild(num);
 
-    if (!c.other && txByDay[c.day]) {
-      const dayTxs = txByDay[c.day];
+    if (!isOther && txByDay[d.getDate()]) {
+      const dayTxs = txByDay[d.getDate()];
       const entriesEl = document.createElement("div");
       entriesEl.className = "day-entries";
       const maxShown = 3;
@@ -275,16 +295,18 @@ function buildMonthGrid(year, month) {
       div.appendChild(entriesEl);
     }
 
-    if (!c.other) {
+    if (!isOther) {
       div.addEventListener("click", () => openDayModal(dateStr));
     }
     panel.appendChild(div);
-  });
+  }
 
   return panel;
 }
 
 async function renderCalendar() {
+  renderWeekdayRow();
+
   const year = state.viewYear;
   const month = state.viewMonth;
   const prev = addMonths(year, month, -1);
@@ -818,6 +840,48 @@ $("#importCsvBtn").addEventListener("click", async () => {
   renderCalendar();
 });
 
+/* ---------------- Settings: list + detail navigation ---------------- */
+
+function showSettingsList() {
+  $("#settingsList").classList.remove("hidden");
+  $$(".settings-detail").forEach((d) => d.classList.add("hidden"));
+}
+
+function showSettingsDetail(id) {
+  $("#settingsList").classList.add("hidden");
+  $$(".settings-detail").forEach((d) => d.classList.toggle("hidden", d.id !== id));
+}
+
+$$(".settings-row").forEach((row) => {
+  row.addEventListener("click", () => showSettingsDetail(row.dataset.target));
+});
+$$(".settings-back").forEach((btn) => {
+  btn.addEventListener("click", showSettingsList);
+});
+
+function renderSettingsSummaries() {
+  $("#weekStartSummary").textContent = getWeekStart() === 1 ? "月曜日" : "日曜日";
+  $("#subsSummary").textContent = `${state.subscriptions.length}件`;
+  $("#rulesSummary").textContent = `${state.rules.length}件`;
+  $("#balanceSummary").textContent = yen(Number(localStorage.getItem(LS_INITIAL_BALANCE)) || 0);
+}
+
+function renderWeekStartChoices() {
+  const current = getWeekStart();
+  $$("#weekStartChoices .choice-row").forEach((btn) => {
+    btn.classList.toggle("selected", Number(btn.dataset.value) === current);
+  });
+}
+
+$("#weekStartChoices").addEventListener("click", (e) => {
+  const btn = e.target.closest(".choice-row");
+  if (!btn) return;
+  setWeekStart(Number(btn.dataset.value));
+  renderWeekStartChoices();
+  renderSettingsSummaries();
+  renderCalendar();
+});
+
 /* ---------------- Subscriptions (settings) ---------------- */
 
 function renderSubscriptionList() {
@@ -825,6 +889,7 @@ function renderSubscriptionList() {
   list.innerHTML = "";
   if (state.subscriptions.length === 0) {
     list.innerHTML = '<div class="hint">登録されているサブスクはありません</div>';
+    renderSettingsSummaries();
     return;
   }
   state.subscriptions.forEach((s) => {
@@ -842,6 +907,7 @@ function renderSubscriptionList() {
     row.appendChild(delBtn);
     list.appendChild(row);
   });
+  renderSettingsSummaries();
 }
 
 $("#subForm").addEventListener("submit", async (e) => {
@@ -868,6 +934,7 @@ function renderRuleList() {
   list.innerHTML = "";
   if (state.rules.length === 0) {
     list.innerHTML = '<div class="hint">ルールはまだありません</div>';
+    renderSettingsSummaries();
     return;
   }
   state.rules.forEach((r) => {
@@ -884,6 +951,7 @@ function renderRuleList() {
     row.appendChild(delBtn);
     list.appendChild(row);
   });
+  renderSettingsSummaries();
 }
 
 fillCategorySelect($("#ruleCategory"), allCategoriesList());
@@ -909,6 +977,7 @@ $("#balanceForm").addEventListener("submit", (e) => {
   const value = toAmount($("#initialBalance").value) || 0;
   localStorage.setItem(LS_INITIAL_BALANCE, String(value));
   renderSavings();
+  renderSettingsSummaries();
   alert("保存しました");
 });
 

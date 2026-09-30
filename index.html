@@ -36,10 +36,7 @@
     <span id="savingsAmount" class="savings-value">0円</span>
   </div>
   <div class="calendar-wrap">
-    <div class="weekday-row">
-      <span class="wd sun">日</span><span class="wd">月</span><span class="wd">火</span>
-      <span class="wd">水</span><span class="wd">木</span><span class="wd">金</span><span class="wd sat">土</span>
-    </div>
+    <div id="weekdayRow" class="weekday-row"></div>
     <div id="calendarViewport" class="calendar-viewport">
       <div id="calendarTrack" class="calendar-track"></div>
     </div>
@@ -138,58 +135,115 @@
 </main>
 
 <main id="viewSettings" class="view hidden">
-  <div class="panel">
-    <h2>毎月の自動サブスク</h2>
-    <div id="subList" class="sub-list"></div>
-    <form id="subForm" class="form">
-      <label>名前<input type="text" id="sName" placeholder="例）Spotify" required></label>
-      <label>金額（円）<input type="number" id="sAmount" min="0" required></label>
-      <label>毎月の日にち<input type="number" id="sDay" min="1" max="28" value="1" required></label>
-      <button type="submit" class="primary-btn">サブスクを追加</button>
-    </form>
+  <div id="settingsList" class="settings-list">
+    <button type="button" class="settings-row" data-target="detailWeekStart">
+      <span class="settings-row-label">週の開始日</span>
+      <span class="settings-row-value" id="weekStartSummary">日曜日</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
+    <button type="button" class="settings-row" data-target="detailSubs">
+      <span class="settings-row-label">毎月の自動サブスク</span>
+      <span class="settings-row-value" id="subsSummary">0件</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
+    <button type="button" class="settings-row" data-target="detailRules">
+      <span class="settings-row-label">自動カテゴリ分けルール</span>
+      <span class="settings-row-value" id="rulesSummary">0件</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
+    <button type="button" class="settings-row" data-target="detailBalance">
+      <span class="settings-row-label">貯金額の計算</span>
+      <span class="settings-row-value" id="balanceSummary">0円</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
+    <button type="button" class="settings-row" data-target="detailData">
+      <span class="settings-row-label">データ管理</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
+    <button type="button" class="settings-row" data-target="detailHome">
+      <span class="settings-row-label">ホーム画面に追加</span>
+      <span class="settings-row-chevron">&#8250;</span>
+    </button>
   </div>
 
-  <div class="panel">
-    <h2>自動カテゴリ分けルール</h2>
-    <p class="hint">
-      取引先・お店の名前にこのキーワードが含まれていたら、指定したカテゴリを自動でつけます。
-      CSV取込のときに使われます（手入力・レシートでもお店名を入れると自動で候補が入ります）。
-      間違っている場合はここで削除・追加して直せます。
-    </p>
-    <div id="ruleList" class="sub-list"></div>
-    <form id="ruleForm" class="form">
-      <label>キーワード（取引先名の一部）<input type="text" id="ruleKeyword" placeholder="例）Suica" required></label>
-      <label>分類するカテゴリ
-        <select id="ruleCategory"></select>
-      </label>
-      <button type="submit" class="primary-btn">ルールを追加</button>
-    </form>
+  <div id="detailWeekStart" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>週の開始日</h2>
+      <div id="weekStartChoices" class="choice-list">
+        <button type="button" class="choice-row" data-value="0">日曜日<span class="check">&#10003;</span></button>
+        <button type="button" class="choice-row" data-value="1">月曜日<span class="check">&#10003;</span></button>
+      </div>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>貯金額の計算</h2>
-    <p class="hint">
-      「貯金額」は、この初期残高に、これまで記録した収入・支出の差し引きを足して計算します
-      （ポイント・投資として除外した明細は含みません）。実際の口座残高に合わせたいときに入力してください。
-    </p>
-    <form id="balanceForm" class="form">
-      <label>初期残高（円）<input type="number" id="initialBalance" value="0"></label>
-      <button type="submit" class="primary-btn">保存する</button>
-    </form>
+  <div id="detailSubs" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>毎月の自動サブスク</h2>
+      <div id="subList" class="sub-list"></div>
+      <form id="subForm" class="form">
+        <label>名前<input type="text" id="sName" placeholder="例）Spotify" required></label>
+        <label>金額（円）<input type="number" id="sAmount" min="0" required></label>
+        <label>毎月の日にち<input type="number" id="sDay" min="1" max="28" value="1" required></label>
+        <button type="submit" class="primary-btn">サブスクを追加</button>
+      </form>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>データ管理</h2>
-    <p class="hint">この記録はこの端末のブラウザ内だけに保存されます（自分専用・非公開）。</p>
-    <button id="exportBtn" class="secondary-btn">バックアップを書き出す（JSON）</button>
-    <input type="file" id="importFile" accept="application/json" class="hidden">
-    <button id="importBtn" class="secondary-btn">バックアップを読み込む</button>
-    <button id="clearBtn" class="danger-btn">すべてのデータを削除</button>
+  <div id="detailRules" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>自動カテゴリ分けルール</h2>
+      <p class="hint">
+        取引先・お店の名前にこのキーワードが含まれていたら、指定したカテゴリを自動でつけます。
+        CSV取込のときに使われます（手入力・レシートでもお店名を入れると自動で候補が入ります）。
+        間違っている場合はここで削除・追加して直せます。
+      </p>
+      <div id="ruleList" class="sub-list"></div>
+      <form id="ruleForm" class="form">
+        <label>キーワード（取引先名の一部）<input type="text" id="ruleKeyword" placeholder="例）Suica" required></label>
+        <label>分類するカテゴリ
+          <select id="ruleCategory"></select>
+        </label>
+        <button type="submit" class="primary-btn">ルールを追加</button>
+      </form>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>ホーム画面に追加</h2>
-    <p class="hint">Safari/Chromeの共有メニューから「ホーム画面に追加」を選ぶと、アプリのように使えます。</p>
+  <div id="detailBalance" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>貯金額の計算</h2>
+      <p class="hint">
+        「貯金額」は、この初期残高に、これまで記録した収入・支出の差し引きを足して計算します
+        （ポイント・投資として除外した明細は含みません）。実際の口座残高に合わせたいときに入力してください。
+      </p>
+      <form id="balanceForm" class="form">
+        <label>初期残高（円）<input type="number" id="initialBalance" value="0"></label>
+        <button type="submit" class="primary-btn">保存する</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="detailData" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>データ管理</h2>
+      <p class="hint">この記録はこの端末のブラウザ内だけに保存されます（自分専用・非公開）。</p>
+      <button id="exportBtn" class="secondary-btn">バックアップを書き出す（JSON）</button>
+      <input type="file" id="importFile" accept="application/json" class="hidden">
+      <button id="importBtn" class="secondary-btn">バックアップを読み込む</button>
+      <button id="clearBtn" class="danger-btn">すべてのデータを削除</button>
+    </div>
+  </div>
+
+  <div id="detailHome" class="settings-detail hidden">
+    <button type="button" class="settings-back">&#8249; 設定</button>
+    <div class="panel">
+      <h2>ホーム画面に追加</h2>
+      <p class="hint">Safari/Chromeの共有メニューから「ホーム画面に追加」を選ぶと、アプリのように使えます。</p>
+    </div>
   </div>
 </main>
 
